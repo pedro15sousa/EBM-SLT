@@ -10,10 +10,11 @@ from utils.sampler import Sampler
 
 class DeepEnergyModel(pl.LightningModule):
 
-    def __init__(self, img_shape, batch_size, alpha=0.1, lr=1e-4, beta1=0.0, f=ResNet18, **f_args):
+    def __init__(self, img_shape, batch_size, slt=False, alpha=0.1, lr=1e-4, beta1=0.0, f=ResNet18, **f_args):
         super().__init__()
         self.save_hyperparameters()
         self.cnn = f(**f_args)
+        self.slt = slt
         self.sampler = Sampler(self.cnn, img_shape=img_shape, sample_size=batch_size)
         self.example_input_array = torch.zeros(1, *img_shape)
 
@@ -44,7 +45,7 @@ class DeepEnergyModel(pl.LightningModule):
 
     def sample_images_for_metrics(self):
         # Generate images for computing metrics
-        samples = self.sampler.sample_new_exmps(steps=60, step_size=10)
+        samples = self.sampler.sample_new_exmps(self.slt, steps=60, step_size=10)
         return samples
 
     def forward(self, x):
@@ -69,7 +70,7 @@ class DeepEnergyModel(pl.LightningModule):
         real_imgs.add_(small_noise).clamp_(min=-1.0, max=1.0)
 
         # Obtain samples
-        fake_imgs = self.sampler.sample_new_exmps(steps=60, step_size=10)
+        fake_imgs = self.sampler.sample_new_exmps(self.slt, steps=60, step_size=10)
 
         # Predict energy score for all images
         inp_imgs = torch.cat([real_imgs, fake_imgs], dim=0)

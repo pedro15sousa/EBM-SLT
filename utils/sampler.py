@@ -22,7 +22,7 @@ class Sampler:
         self.max_len = max_len
         self.examples = [(torch.rand((1,)+img_shape)*2-1) for _ in range(self.sample_size)]
 
-    def sample_new_exmps(self, steps=60, step_size=10):
+    def sample_new_exmps(self, slt=False, steps=60, step_size=10):
         """
         Function for getting a new batch of "fake" images.
         Inputs:
@@ -36,7 +36,7 @@ class Sampler:
         inp_imgs = torch.cat([rand_imgs, old_imgs], dim=0).detach().to(device)
 
         # Perform MCMC sampling
-        inp_imgs = Sampler.generate_samples(self.model, inp_imgs, steps=steps, step_size=step_size)
+        inp_imgs = Sampler.generate_samples(self.model, inp_imgs, slt, steps=steps, step_size=step_size)
 
         # Add new images to the buffer and remove old ones if needed
         self.examples = list(inp_imgs.to(torch.device("cpu")).chunk(self.sample_size, dim=0)) + self.examples
@@ -44,7 +44,7 @@ class Sampler:
         return inp_imgs
 
     @staticmethod
-    def generate_samples(model, inp_imgs, steps=60, step_size=10, return_img_per_step=False):
+    def generate_samples(model, inp_imgs, slt=False, steps=60, step_size=10, return_img_per_step=False):
         """
         Function for sampling images for a given model.
         Inputs:
@@ -58,8 +58,15 @@ class Sampler:
         # because we are only interested in the gradients of the input.
         is_training = model.training
         model.eval()
-        for p in model.parameters():
-            p.requires_grad = False
+        
+        if slt:
+            for name, p in model.named_parameters():
+                if 'scores' in name:
+                    p.requires_grad = False
+        else:    
+            for p in model.parameters():
+                p.requires_grad = False
+
         inp_imgs.requires_grad = True
 
         # Enable gradient calculation if not already the case
@@ -98,8 +105,14 @@ class Sampler:
                 imgs_per_step.append(inp_imgs.clone().detach())
 
         # Reactivate gradients for parameters for training
-        for p in model.parameters():
-            p.requires_grad = True
+        if slt:
+            for name, p in model.named_parameters():
+                if 'scores' in name:
+                    p.requires_grad = True
+        else:
+            for p in model.parameters():
+                p.requires_grad = True
+
         model.train(is_training)
 
         # Reset gradient calculation to setting before this function
